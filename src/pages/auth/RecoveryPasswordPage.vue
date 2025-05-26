@@ -22,14 +22,16 @@
           {{ error }}
         </div>
 
-        <q-btn
-          rounded
-          label="Enviar link de redefinição"
+        <button
           type="submit"
-          color="primary"
-          class="w-full"
-          :loading="loading"
-        />
+          class="w-full rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 transition duration-200 disabled:opacity-50"
+          :disabled="loading"
+        >
+          <div class="flex justify-center items-center">
+          <span v-if="!loading">Enviar link de redefinição</span>
+          <q-spinner v-else size="sm" color="white" />
+          </div>
+        </button>
       </q-form>
 
       <p class="text-sm text-center mt-4 text-gray-600">
@@ -42,7 +44,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useQuasar } from 'quasar'
-import useAuthUser from 'src/composables/auth/useAuthUser'
+import useAuthUser from 'src/composables/auth/UseAuthUser.js'
 
 const $q = useQuasar()
 const email = ref('')

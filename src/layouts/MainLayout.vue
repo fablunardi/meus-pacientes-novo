@@ -1,102 +1,135 @@
 <template>
-  <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
-      <q-toolbar>
-        <q-btn
-          flat
-          dense
-          round
-          icon="menu"
-          aria-label="Menu"
-          @click="toggleLeftDrawer"
-        />
+  <q-layout view="lHh Lpr lFf" class="bg-gray-100 text-gray-800">
+    <!-- Navbar -->
+    <header class="bg-white shadow w-full fixed top-0 z-50">
+      <div class="w-full px-4">
+        <div class="flex justify-between items-center h-16">
+          <!-- Logo -->
+          <router-link
+            to="/"
+            class="flex items-center space-x-2 text-lg font-bold text-gray-900"
+          >
+            <img src="/logo.png" alt="Logo" style="width: 50px; height: 50px" />
+            <span class="q-pa-sm text-primary">Meus Pacientes</span>
+            <span class="q-pa-sm text-primary text-xs">Bem vindo {{ userStore.userLogged?.nm_usuario || '...' }}</span>
+          </router-link>
 
-        <q-toolbar-title>
-          Quasar App
-        </q-toolbar-title>
+          <!-- Menu desktop -->
+          <nav v-if="isDesktop" class="flex items-center space-x-6">
+            <router-link
+              v-for="item in menuItems"
+              :key="item.label"
+              :to="item.route"
+              class="flex items-center space-x-2 hover:text-primary font-medium"
+            >
+              <component
+                :is="item.icon"
+                class="w-5 h-5 shrink-0 text-primary"
+                style="width: 30px !important; height: 30px !important;"
+              />
+              <span>{{ item.label }}</span>
+            </router-link>
+            <button
+              @click="handleLogout"
+              class="flex items-center space-x-2 hover:text-red-600 font-medium"
+            >
+              <q-icon name="logout" class="text-red-600" />
+              <span>Sair</span>
+            </button>
+          </nav>
 
-        <div>Quasar v{{ $q.version }}</div>
-      </q-toolbar>
-    </q-header>
+          <!-- Botão mobile -->
+          <button v-show="!isDesktop" @click="mobileMenu = !mobileMenu">
+            <q-icon :name="mobileMenu ? 'close' : 'menu'" size="md" />
+          </button>
+        </div>
+      </div>
 
-    <q-drawer
-      v-model="leftDrawerOpen"
-      show-if-above
-      bordered
-    >
-      <q-list>
-        <q-item-label
-          header
+      <!-- Mobile menu -->
+      <div v-if="!isDesktop && mobileMenu" class="md:hidden px-4 pb-4 bg-white shadow">
+        <router-link
+          v-for="item in menuItems"
+          :key="item.label"
+          :to="item.route"
+          class="flex items-center space-x-2 hover:text-primary font-medium"
+          @click="mobileMenu = false"
         >
-          Essential Links
-        </q-item-label>
+          <component
+            :is="item.icon"
+            class="w-6 h-6 shrink-0 text-primary mr-4"
+            style="width: 30px !important; height: 30px !important"
+          />
+          <span class="q-pa-md">{{ item.label }}</span>
+        </router-link>
+        <button
+          @click="() => { mobileMenu = false; handleLogout() }"
+          class="flex items-center  hover:text-red-600 font-medium"
+        >
+          <q-icon size="30px" name="logout" class="text-red-600"/>
+          <span class="q-pa-md">Sair</span>
+        </button>
+      </div>
+    </header>
 
-        <EssentialLink
-          v-for="link in linksList"
-          :key="link.title"
-          v-bind="link"
-        />
-      </q-list>
-    </q-drawer>
-
-    <q-page-container>
+    <!-- Conteúdo da página -->
+    <q-page-container class="pt-20 px-4">
       <router-view />
     </q-page-container>
   </q-layout>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import EssentialLink from 'components/EssentialLink.vue'
+import {computed, onMounted, ref, watch} from 'vue'
+import { useQuasar } from 'quasar'
+import { useRouter } from 'vue-router'
+import useAuthUser from 'src/composables/auth/UseAuthUser'
 
-const linksList = [
-  {
-    title: 'Docs',
-    caption: 'quasar.dev',
-    icon: 'school',
-    link: 'https://quasar.dev'
-  },
-  {
-    title: 'Github',
-    caption: 'github.com/quasarframework',
-    icon: 'code',
-    link: 'https://github.com/quasarframework'
-  },
-  {
-    title: 'Discord Chat Channel',
-    caption: 'chat.quasar.dev',
-    icon: 'chat',
-    link: 'https://chat.quasar.dev'
-  },
-  {
-    title: 'Forum',
-    caption: 'forum.quasar.dev',
-    icon: 'record_voice_over',
-    link: 'https://forum.quasar.dev'
-  },
-  {
-    title: 'Twitter',
-    caption: '@quasarframework',
-    icon: 'rss_feed',
-    link: 'https://twitter.quasar.dev'
-  },
-  {
-    title: 'Facebook',
-    caption: '@QuasarFramework',
-    icon: 'public',
-    link: 'https://facebook.quasar.dev'
-  },
-  {
-    title: 'Quasar Awesome',
-    caption: 'Community Quasar projects',
-    icon: 'favorite',
-    link: 'https://awesome.quasar.dev'
+import {
+  UserIcon,
+  CalendarDaysIcon,
+  ClipboardDocumentIcon,
+  ChatBubbleLeftRightIcon,
+  ChartBarIcon,
+  Cog6ToothIcon
+} from '@heroicons/vue/24/outline'
+
+import { useUserStore } from 'src/stores/userStore'
+import { useConsultorioUserStore } from 'src/stores/consultorioUserStore'
+
+const $q = useQuasar()
+const mobileMenu = ref(false)
+const isDesktop = computed(() => $q.screen.gt.sm)
+const router = useRouter()
+const { logout,  user } = useAuthUser()
+const userStore = useUserStore()
+
+watch(isDesktop, (newVal) => {
+  if (newVal) {
+    mobileMenu.value = false
   }
-]
+})
 
-const leftDrawerOpen = ref(false)
-
-function toggleLeftDrawer () {
-  leftDrawerOpen.value = !leftDrawerOpen.value
+const handleLogout = async () => {
+  try {
+    await logout()
+    await router.push('/login')
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Erro ao sair: ' + err.message })
+  }
 }
+
+onMounted(async () => {
+
+
+
+})
+
+const menuItems = [
+  { label: 'Agendamentos', route: '/consults', icon: CalendarDaysIcon },
+  { label: 'Pacientes', route: '/patients', icon: UserIcon },
+  { label: 'Medicamentos', route: '/drugs', icon: ClipboardDocumentIcon },
+  { label: 'Mensagens', route: '/chats', icon: ChatBubbleLeftRightIcon },
+  { label: 'Relatórios', route: '/reports', icon: ChartBarIcon },
+  { label: 'Configurações', route: '/settings', icon: Cog6ToothIcon }
+]
 </script>

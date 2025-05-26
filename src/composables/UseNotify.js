@@ -34,7 +34,7 @@ export default function useNotify () {
       position:'top-right',
       color:'primary',
       icon: 'favorite',
-      message: message || t('success')
+      message: message || ('success')
     })
   }
 

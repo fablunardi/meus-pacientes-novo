@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import useSupabase from "boot/supabase";
+import { useRouter } from 'vue-router'
 
 const user = ref (null)
 
@@ -8,27 +9,21 @@ export default function useAuthUser(){
 
 
   const { supabase } = useSupabase()
-  const login = async ({email, password})=>{
 
-    const { user, error } = await supabase.auth.signInWithPassword({ email, password });
+  const router = useRouter()
 
-    if (error) throw error;
+  const login = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-    return user;
+    if (error) throw error
 
-  }
+    if (data?.weakPassword) {
+      console.warn('Senha fraca detectada, redirecionando para redefinição...')
+      await router.push('/reset-password')
+      return null
+    }
 
-  const userWithBlockedAccess = async (id, t)=>{
-
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('status')
-      .eq('id', id)
-      .single();
-
-    if (profileError) throw profileError;
-
-    return profile
+    return data.user
   }
 
   const loginWithSocialProvider = async (provider)=>{
@@ -97,27 +92,20 @@ export default function useAuthUser(){
 
   const sendPasswordResetEmail = async (email) =>{
 
-    const {user, error} = await supabase.auth.resetPasswordForEmail(email, {redirectTo: `${window.location.origin}/auth/reset-password`,})
+    const {user, error} = await supabase.auth.resetPasswordForEmail(email, {redirectTo: `${window.location.origin}/reset-password`,})
       if (error) throw error
       return user
 
   }
 
 
-  const resetPassword = async (token, type, email, newPassword)=>{
-
-    await supabase.auth.verifyOtp({
-      email: email,
-      token:token,
-      type:type
-    })
+  const resetPassword = async (newPassword)=>{
 
     const {user, error} = await  supabase.auth.updateUser(
       {
         password: newPassword
       }
       )
-
     if (error) throw error
     return user
   }
@@ -140,12 +128,33 @@ export default function useAuthUser(){
     }
   }
 
+  async function verifyOtp(email, otp) {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'signup',
+      });
+
+      if (error) {
+        console.error('Error during OTP verification:', error);
+        throw new Error(error.message);
+      }
+
+      user.value = data.user;
+      return { success: true, user: data.user };
+    } catch (error) {
+      console.error('Unexpected error during OTP verification:', error);
+      throw error;
+    }
+  }
+
 
   return {
+    verifyOtp,
     resendConfirmationEmail,
     checkAndRefreshToken,
     user,
-    userWithBlockedAccess,
     login,
     loginWithSocialProvider,
     logout,

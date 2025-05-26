@@ -6,11 +6,7 @@ const supabaseKey = process.env.SUPABASE_KEY
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 supabase.auth.onAuthStateChange(async(event, session) => {
-  if (event == "PASSWORD_RECOVERY") {
 
-  } else{
-
-  }
   const { user } = useAuthUser()
   user.value = session?.user || null
 })

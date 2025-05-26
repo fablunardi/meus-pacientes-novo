@@ -1,6 +1,5 @@
 import useSupabase from 'src/boot/supabase'
 import { v4 as uuidv4 } from 'uuid'
-import { Notify } from 'quasar';
 import { ref } from 'vue'
 import {eventBus} from "src/composables/eventBus";
 import { format } from 'date-fns';
@@ -23,23 +22,6 @@ export default function useApi () {
       .limit(1)
     if (error) throw error
     return data
-  }
-
-
-  const generateRtcToken = async (user, otherUser, uid, appId, appCertificate) => {
-    const channelName = generateChannelName(user, otherUser);
-    const {data, error} = await supabase.functions.invoke('create-agora-token', {
-      body: {
-        appId: appId,
-        appCertificate:appCertificate,
-        channelName:channelName,
-        uid:uid
-      },
-    })
-
-    if (error) throw error
-    return data
-
   }
 
   const generateLinkPaymentStripe = async (price_id, url_ok, url_error, email_client, product) => {
@@ -81,259 +63,6 @@ export default function useApi () {
     if (error) throw error
     return data
 
-  }
-
-  function generateChannelName(senderId, recipientId) {
-    const ids = [senderId, recipientId].sort();
-
-    return `${ids[0]}${ids[1]}`.replace(/-/g, '');
-  }
-
-  const presenceChat = async (user, otherUser) => {
-    const channelName = generateChannelName(user, otherUser);
-    channel.value = supabase.channel(channelName)
-
-    const userStatus = {
-      user: user,
-      online_at: new Date().toISOString(),
-    }
-
-    channel.value
-      .on('presence', { event: 'sync' }, () => {
-        const newState = channel.value.presenceState()
-        //console.log('sync', newState)
-      })
-      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        //console.log('join', key, newPresences)
-
-        if (user) {
-          online.value = true
-          //console.log (online.value)
-        }
-      })
-      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        //console.log('leave', key, leftPresences)
-        // eventBus.emit('checkLeave');
-      })
-      .subscribe(async (status) => {
-        if (status !== 'SUBSCRIBED') { return }
-
-        const presenceTrackStatus = await channel.value.track(userStatus)
-        //console.log(presenceTrackStatus)
-      })
-
-  }
-
-  const presenceVideo = async (user, otherUser) => {
-    const channelName = generateChannelName(user, otherUser);
-    channelVideo.value = supabase.channel('video-call'+channelName)
-
-    const userStatus = {
-      user: user,
-      online_at: new Date().toISOString(),
-    }
-
-    channelVideo.value
-      .on('presence', { event: 'sync' }, () => {
-        const newState = channelVideo.value.presenceState()
-        //console.log('sync', newState)
-      })
-      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        //console.log('join', key, newPresences);
-
-        if (user) {
-          onlineVideo.value = true
-          //console.log (onlineVideo.value)
-        }
-      })
-      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        // eventBus.emit('checkLeave');
-        //console.log('leave', key, leftPresences)
-      })
-      .subscribe(async (status) => {
-        if (status !== 'SUBSCRIBED') { return }
-
-        const presenceTrackStatus = await channelVideo.value.track(userStatus)
-        //console.log(presenceTrackStatus)
-      })
-
-  }
-
-  const leaveChannelVideo = async (user) => {
-    if (channelVideo.value) {
-      await channelVideo.value.unsubscribe();
-      channelVideo.value = null;
-      if (user) {
-        onlineVideo.value = false
-        //console.log (onlineVideo.value)
-        // eventBus.emit('checkLeave');
-      }
-    }
-  };
-
-  const leaveChannel = async (user) => {
-    if (channel.value) {
-      await channel.value.unsubscribe();
-      channel.value = null;
-      if (user) {
-        online.value = false
-        //console.log (online.value)
-      }
-    }
-  };
-
-
-
-  const listeningReLikesUpdate = (id_user, t) => {
-    supabase
-      .channel('RelikesToMeUpdate')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'likes',
-          filter: `second_user=eq.${id_user}`,
-        },
-        (payload) => {
-          eventBus.emit('updateLikesInfo');
-          if (payload.new.relike > payload.old.relike) {
-            Notify.create({
-              icon: 'favorite',
-              progress: true,
-              position: 'top-right',
-              color: 'primary',
-              multiLine: true,
-              message: payload.old.name_first + ' ' + t('you_received_like'),
-            }, 5000);
-          }
-        }
-      )
-      .subscribe();
-  };
-
-  const listeningRejectLike = (id_user, t) => {
-    supabase
-      .channel('listeningRejectLike')
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'likes',
-          filter: `first_user=eq.${id_user}`,
-        },
-        (payload) => {
-          eventBus.emit('updateLikesInfo');
-        }
-      )
-      .subscribe();
-  };
-
-  const listeningBlockUsers = (id_user, t) => {
-    supabase
-      .channel('listeningBlockUsers')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'blockers',
-          filter: `second_user=eq.${id_user}`,
-        },
-        (payload) => {
-          eventBus.emit('reloadNotifications');
-          eventBus.emit('updateLikesInfo');
-        }
-      )
-      .subscribe();
-  };
-
-  const listeningChats = (id_user) => {
-    supabase
-      .channel('listeningChats')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chats',
-          filter: `recipient=eq.${id_user}`,
-        },
-        async (payload) => {
-          eventBus.emit('insertChat');
-
-          if (online.value === false) {
-            eventBus.emit('updateLikesInfo');
-            eventBus.emit('reloadNotifications');
-          }
-
-        }
-      )
-      .subscribe();
-  };
-
-
-
-  const listeningLikesUpdate = (id_user, t) => {
-    supabase
-      .channel('likesToMeUpdate')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'likes',
-          filter: `first_user=eq.${id_user}`,
-        },
-        (payload) => {
-          eventBus.emit('updateLikesInfo');
-          if (payload.new.second_user_accepted === true&&payload.new.first_user_read===false && payload.old.relike === payload.new.relike) {
-            updateNotification(payload.new)
-            Notify.create({
-              icon: 'favorite',
-              progress: true,
-              position: 'top-right',
-              color: 'primary',
-              multiLine: true,
-              message: payload.new.name_second + ' ' + t('like_accepted'),
-            }, 5000);
-          }
-        }
-      )
-      .subscribe();
-  };
-
-  const listeningLikes = (id_user, t) => {
-    supabase
-      .channel('likesToMeInsert')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'likes',
-          filter: `second_user=eq.${id_user}`,
-        },
-        (payload) => {
-            eventBus.emit('updateLikesInfo');
-            updateNotification(payload.new)
-            Notify.create({
-              icon: 'favorite',
-              progress: true,
-              position: 'top-right',
-              color: 'primary',
-              multiLine: true,
-              message: payload.new.name_first + ' ' + t('like_to_you'),
-            }, 5000);
-          }
-
-      )
-      .subscribe();
-  };
-
-   const updateNotification = (newData) => {
-    notification.value = [...notification.value, newData];
   }
 
   const list = async (table) => {
@@ -494,11 +223,11 @@ export default function useApi () {
     return data
   }
 
-  const updateTable = async (table, form) => {
+  const updateTable = async (table, col, col_value, form) => {
     const { data, error } = await supabase
       .from(table)
       .update({ ...form })
-      .match({ id: form.id })
+      .match({[col]: col_value })
       .select()
     if (error) throw error
     return data
@@ -758,131 +487,6 @@ export default function useApi () {
     }
   }
 
-  async function fetchMatches(user) {
-    const { data, error } = await supabase
-      .from('likes')
-      .select(`
-      id,
-      first_user,
-      second_user,
-      first_user_profile:profiles!fk_profile_1 (id, name, url_avatar, gender, status),
-      second_user_profile:profiles!fk_profile_2 (id, name, url_avatar, gender, status)
-    `)
-      .or(`first_user.eq.${user},second_user.eq.${user}`)
-      .filter('second_user_accepted', 'eq', true)
-
-
-    if (error) {
-      console.error('Error query:', error);
-      return [];
-    } else {
-      const profiles = data.reduce((acc, item) => {
-        if (item.first_user === user && item.second_user_profile.id !== user && item.second_user_profile.status===1 ) {
-          acc.push(
-            {
-              like_result:true,
-              id_like:item.id,
-              gender:item.second_user_profile.gender,
-              id:item.second_user_profile.id,
-              name:item.second_user_profile.name,
-              url_avatar:item.second_user_profile.url_avatar,
-
-            }
-            );
-
-        } else if (item.second_user === user && item.first_user_profile.id !== user && item.second_user_profile.status===1) {
-          acc.push(
-
-            {
-              like_result:true,
-              id_like:item.id,
-              gender:item.first_user_profile.gender,
-              id:item.first_user_profile.id,
-              name:item.first_user_profile.name,
-              url_avatar:item.first_user_profile.url_avatar,
-
-            }
-
-          );
-
-        }
-
-        return acc;
-      }, []);
-      for (const item of profiles) {
-        const { data: unreadCount, error: unreadError, count } = await supabase
-          .from('chats')
-          .select('id', { count: 'exact' })
-          .eq('recipient', user)
-          .eq('sender', item.id)
-          .eq('read_recipient', false)
-
-        if (unreadError) {
-          console.error('Error fetching unread messages:', unreadError);
-          continue;
-        }
-        item.unreadMessages = count
-      }
-
-        return profiles;
-    }
-  }
-
-  async function fetchChats(user, other_user) {
-    const { data, error } = await supabase
-      .from('chats')
-      .select(`
-            id,
-            sender,
-            recipient,
-            message,
-            created_at,
-            url_image,
-            url_audio,
-            isSecretMessageProcessed,
-            callAccept,
-            endCall,
-            sender_profile:profiles!sender (id, name, url_avatar, gender),
-            recipient_profile:profiles!recipient (id, name, url_avatar, gender)
-        `)
-      .or(`sender.eq.${user},recipient.eq.${user}`)
-      .or(`sender.eq.${other_user},recipient.eq.${other_user}`)
-      .order('id', { descending: false });
-
-    if (error) {
-      console.error('Error query:', error);
-      return [];
-    }
-
-    const chats = data.map(chat => {
-      return {
-        ...chat,
-        created_at: format(new Date(chat.created_at), 'dd/MM/yy HH:mm'),
-        sender_name: chat.sender_profile.name,
-        sender_avatar: chat.sender_profile.url_avatar,
-        sender_gender: chat.sender_profile.gender,
-        recipient_name: chat.recipient_profile.name,
-        recipient_avatar: chat.recipient_profile.url_avatar,
-        recipient_gender: chat.recipient_profile.gender
-      };
-    });
-
-    return chats;
-  }
-
-  const checkIfBlocked = async (userId, otherUserId) => {
-    const { data, error } = await supabase
-      .from('blockers')
-      .select('*')
-      .or(`and(first_user.eq.${userId},second_user.eq.${otherUserId}),and(first_user.eq.${otherUserId},second_user.eq.${userId})`);
-
-    if (error) {
-      console.error('Error:', error);
-      return false;
-    }
-
-    return data.length > 0;
-  };
 
   const sendPushNotification = async (recipient, message, title, subtitle)=>{
     let { data, error } = await supabase
@@ -895,22 +499,6 @@ export default function useApi () {
     if (error) throw error
     return data
   }
-
-  async function fetchUnreadMessagesCount(user) {
-    const { data, error, count } = await supabase
-      .from('chats')
-      .select('*', { count: 'exact' })
-      .eq('recipient', user)
-      .eq('read_recipient', false);
-
-    if (error) {
-      console.error('Error fetching unread messages count:', error);
-      return 0;
-    }
-
-    return count;
-  }
-
   const listAllUsers = async (page, limit = 500) => {
     const startIndex = (page - 1) * limit;
     const endIndex = page * limit - 1;
@@ -1457,10 +1045,90 @@ export default function useApi () {
     return data;  // data será um valor booleano (true ou false)
   };
 
+  const fetchConsultas = async (consultorioId, usuarioId) => {
+    const { data, error } = await supabase
+      .from('consulta')
+      .select('cd_consulta, titulo, inicio, fim, color, cd_usuario, cd_paciente')
+      .eq('cd_consultorio', consultorioId)
+      .eq('cd_usuario', usuarioId)
+      .order('cd_consulta', { ascending: true })
 
+    if (error) {
+      console.error('Erro ao buscar consultas:', error)
+      throw error
+    }
+
+    return data.map(row => ({
+      id:          row.cd_consulta,
+      title:       row.titulo,
+      start_event: row.inicio,
+      end_event:   row.fim,
+      color:       row.color,
+      description: row.cd_usuario,
+      cd_paciente: row.cd_paciente
+    }))
+  }
+
+  const fetchPacientesByConsultorio = async (consultorioId) => {
+    const { data, error } = await supabase
+      .from('paciente')
+      .select('nm_paciente, cd_paciente')
+      .eq('cd_consultorio', consultorioId)
+      .eq('ativo', 0)
+      .order('nm_paciente', { ascending: true })
+
+    if (error) {
+      console.error('Erro ao buscar pacientes:', error)
+      throw error
+    }
+
+    return data.map(row => ({
+      id:   row.cd_paciente,
+      name: row.nm_paciente
+    }))
+  }
+
+  const fetchPacientesByConsultorioFull = async (consultorioId) => {
+    const { data, error } = await supabase
+      .from('paciente')
+      .select('*')
+      .eq('cd_consultorio', consultorioId)
+      .eq('ativo', 0)
+      .order('nm_paciente', { ascending: true })
+
+    if (error) {
+      console.error('Erro ao buscar pacientes:', error)
+      throw error
+    }
+
+    return data
+  }
+
+  const fetchServicosByConsultorio = async (consultorioId) => {
+    const { data, error } = await supabase
+      .from('servicos')
+      .select('nm_servico, cd_servico')
+      .eq('cd_consultorio', consultorioId)
+      .eq('bloquear_servico', 0)
+      .order('nm_servico', { ascending: true })
+
+    if (error) {
+      console.error('Erro ao buscar servicos:', error)
+      throw error
+    }
+
+    return data.map(row => ({
+      id:   row.cd_servico,
+      name: row.nm_servico
+    }))
+  }
 
 
   return {
+    fetchPacientesByConsultorioFull,
+    fetchServicosByConsultorio,
+    fetchPacientesByConsultorio,
+    fetchConsultas,
     registerApiCall,
     getDsAtualizacao,
     lastAtualizacao,
@@ -1495,33 +1163,17 @@ export default function useApi () {
     getTotalUsersCount,
     listAllUsers,
     sendPushNotification,
-    fetchUnreadMessagesCount,
-    checkIfBlocked,
-    generateChannelName,
-    generateRtcToken,
     online,
     onlineVideo,
     channel,
     channelVideo,
-    presenceChat,
-    presenceVideo,
-    leaveChannel,
-    leaveChannelVideo,
     updateChatsReadStatus,
-    listeningRejectLike,
-    listeningBlockUsers,
-    fetchChats,
-    listeningReLikesUpdate,
-    fetchMatches,
     fetchLikesSent,
     fetchLikesReceived,
     get_profile,
-    listeningLikesUpdate,
     fetchDataThreeColumns,
     fetchDataTwoColumns,
-    updateNotification,
     notification,
-    listeningLikes,
     nearby_profiles,
     listPublicAll,
     list,
@@ -1544,7 +1196,6 @@ export default function useApi () {
     listByColumn,
     verifyGooglePaymentUser,
     usersBlocked,
-    listeningChats,
     configurations,
     removeFilter,
     fetchDataTwoColumnsOR,

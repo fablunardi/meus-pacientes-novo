@@ -21,15 +21,13 @@
         <div v-if="error" class="text-red-600 text-sm mt-2">
           {{ error }}
         </div>
-
-        <q-btn
-          rounded
+        <button
           type="submit"
-          label="Alterar Senha"
-          color="primary"
-          class="w-full"
-          :loading="loading"
-        />
+          class="w-full rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 transition duration-200 disabled:opacity-50 flex justify-center items-center"
+        >
+          <span v-if="!loading">Alterar Senha</span>
+          <q-spinner v-else size="sm" color="white" />
+        </button>
       </q-form>
     </div>
   </div>
@@ -38,7 +36,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import useAuthUser from 'src/composables/auth/UseAuthUser'
+import useAuthUser from 'src/composables/auth/UseAuthUser.js'
 
 const { resetPassword } = useAuthUser()
 const password = ref('')
